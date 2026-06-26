@@ -11,7 +11,7 @@ Notifications.setNotificationHandler({
 });
 
 /**
- * Initialize notifications and request permissions
+ * Initialize notifications and request permissions adadad
  */
 export const registerForPushNotificationsAsync = async () => {
     let token;
