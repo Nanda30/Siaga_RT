@@ -1,20 +1,20 @@
+import React, { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View } from 'react-native';
+import { PaperProvider } from 'react-native-paper';
+import { theme } from './src/theme/theme';
+import AppNavigator from './src/navigation/AppNavigator';
+import { registerForPushNotificationsAsync } from './src/services/notifications';
 
 export default function App() {
+  useEffect(() => {
+    // Initialize push notifications
+    registerForPushNotificationsAsync();
+  }, []);
+
   return (
-    <View style={styles.container}>
-      <Text>Open up App.js to start working on your app!</Text>
-      <StatusBar style="auto" />
-    </View>
+    <PaperProvider theme={theme}>
+      <StatusBar style="light" />
+      <AppNavigator />
+    </PaperProvider>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
