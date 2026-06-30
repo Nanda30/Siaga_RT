@@ -1,46 +1,51 @@
 import React from 'react';
 import { StyleSheet, TouchableOpacity, View } from 'react-native';
-import { Text, Surface } from 'react-native-paper';
+import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { alertTypeColors } from '../theme/colors';
+import { typography } from '../theme/typography';
+import { radius } from '../theme/radius';
+import { spacing } from '../theme/spacing';
+import { elevation } from '../theme/elevation';
 
-const AlertButton = ({ title, type, onPress, icon, loading }) => {
-    const isEmergency = type === 'EMERGENCY';
-    const color = isEmergency ? '#FF5252' : '#FFD740';
-    const textColor = isEmergency ? '#FFFFFF' : '#121212';
+/**
+ * Large tappable alert tile used on the user home screen.
+ * Colors derive from the alert type (EMERGENCY / CAUTION).
+ */
+const AlertButton = ({ title, subtitle, type, onPress, icon, disabled = false }) => {
+  const { base, on } = alertTypeColors(type);
 
-    return (
-        <TouchableOpacity
-            activeOpacity={0.8}
-            onPress={onPress}
-            disabled={loading}
-            style={styles.touchable}
-        >
-            <Surface style={[styles.surface, { backgroundColor: color }]}>
-                <MaterialCommunityIcons name={icon} size={48} color={textColor} />
-                <Text variant="titleLarge" style={[styles.text, { color: textColor }]}>
-                    {title}
-                </Text>
-            </Surface>
-        </TouchableOpacity>
-    );
+  return (
+    <TouchableOpacity
+      activeOpacity={0.85}
+      onPress={onPress}
+      disabled={disabled}
+      accessibilityRole="button"
+      accessibilityLabel={`${title}. ${subtitle || ''}`}
+      accessibilityState={{ disabled }}
+      style={[styles.touchable, disabled && styles.disabled]}
+    >
+      <View style={[styles.surface, elevation.md, { backgroundColor: base }]}>
+        <MaterialCommunityIcons name={icon} size={52} color={on} />
+        <Text style={[styles.title, { color: on }]}>{title}</Text>
+        {subtitle ? <Text style={[styles.subtitle, { color: on }]}>{subtitle}</Text> : null}
+      </View>
+    </TouchableOpacity>
+  );
 };
 
 const styles = StyleSheet.create({
-    touchable: {
-        width: '100%',
-        marginVertical: 12,
-    },
-    surface: {
-        height: 140,
-        borderRadius: 20,
-        alignItems: 'center',
-        justifyContent: 'center',
-        elevation: 4,
-    },
-    text: {
-        marginTop: 10,
-        fontWeight: 'bold',
-    },
+  touchable: { width: '100%', marginBottom: spacing.lg },
+  disabled: { opacity: 0.6 },
+  surface: {
+    minHeight: 150,
+    borderRadius: radius.xl,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.lg,
+  },
+  title: { ...typography.screenTitle, marginTop: spacing.sm, letterSpacing: 0.5 },
+  subtitle: { ...typography.caption, marginTop: spacing.xs, textAlign: 'center', opacity: 0.9 },
 });
 
 export default AlertButton;

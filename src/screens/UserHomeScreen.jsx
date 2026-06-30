@@ -1,183 +1,182 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { View, StyleSheet, ScrollView } from 'react-native';
-import { Text, Surface, Divider, Portal, Dialog, Button, Snackbar, ActivityIndicator } from 'react-native-paper';
+import { Text } from 'react-native-paper';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { ref, push, set, serverTimestamp } from 'firebase/database';
 import { db } from '../services/firebase';
 import { getCurrentLocation } from '../services/location';
+import { useClock } from '../hooks/useClock';
+import { useNetworkStatus } from '../hooks/useNetworkStatus';
+import { useLocationStatus } from '../hooks/useLocationStatus';
 import AlertButton from '../components/AlertButton';
+import StatusChip from '../components/StatusChip';
+import InfoCard from '../components/InfoCard';
+import SectionHeader from '../components/SectionHeader';
+import ConfirmationDialog from '../components/ConfirmationDialog';
+import LoadingOverlay from '../components/LoadingOverlay';
+import AppSnackbar from '../components/AppSnackbar';
+import { colors } from '../theme/colors';
+import { typography } from '../theme/typography';
+import { spacing } from '../theme/spacing';
+import { radius } from '../theme/radius';
+import { elevation } from '../theme/elevation';
 
-const UserHomeScreen = ({ route, navigation }) => {
-    const { user } = route.params;
-    const [loading, setLoading] = useState(false);
-    const [snackbarVisible, setSnackbarVisible] = useState(false);
-    const [snackbarMessage, setSnackbarMessage] = useState('');
-    const [confirmDialog, setConfirmDialog] = useState({ visible: false, type: '' });
+const DATE_OPTS = { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' };
 
-    const sendAlert = async (type) => {
-        setLoading(true);
-        setConfirmDialog({ visible: false, type: '' });
+const INSTRUCTIONS = [
+  'Pastikan GPS dan internet aktif sebelum melapor.',
+  'Tekan DARURAT untuk situasi mengancam jiwa.',
+  'Tekan SIAGA untuk kejadian yang perlu perhatian.',
+  'Tetap di lokasi aman hingga petugas merespons.',
+];
 
-        try {
-            // 1. Get current location
-            const location = await getCurrentLocation();
+const UserHomeScreen = ({ route }) => {
+  const { user } = route.params;
+  const now = useClock();
+  const online = useNetworkStatus();
+  const gps = useLocationStatus();
 
-            // 2. Create alert object
-            const alertId = push(ref(db, 'alerts')).key;
-            const alertData = {
-                alertId,
-                userId: user.uid,
-                userName: user.name,
-                phone: user.phone,
-                type: type, // EMERGENCY or CAUTION
-                latitude: location.latitude,
-                longitude: location.longitude,
-                address: location.address,
-                status: 'PENDING',
-                createdAt: serverTimestamp(),
-            };
+  const [loading, setLoading] = useState(false);
+  const [confirm, setConfirm] = useState({ visible: false, type: '' });
+  const [snack, setSnack] = useState({ visible: false, message: '', variant: 'success' });
 
-            // 3. Save to Firebase
-            await set(ref(db, `alerts/${alertId}`), alertData);
+  const sendAlert = useCallback(async (type) => {
+    setConfirm({ visible: false, type: '' });
+    setLoading(true);
+    try {
+      const location = await getCurrentLocation();
+      const alertId = push(ref(db, 'alerts')).key;
+      const alertData = {
+        alertId,
+        userId: user.uid,
+        userName: user.name,
+        phone: user.phone,
+        type,
+        latitude: location.latitude,
+        longitude: location.longitude,
+        address: location.address,
+        status: 'PENDING',
+        createdAt: serverTimestamp(),
+      };
+      await set(ref(db, `alerts/${alertId}`), alertData);
+      setSnack({
+        visible: true,
+        variant: 'success',
+        message: `Laporan ${type === 'EMERGENCY' ? 'Darurat' : 'Siaga'} terkirim. Petugas akan merespons.`,
+      });
+    } catch (error) {
+      setSnack({ visible: true, variant: 'error', message: error?.message || 'Gagal mengirim laporan.' });
+    } finally {
+      setLoading(false);
+    }
+  }, [user]);
 
-            setSnackbarMessage(`Laporan ${type === 'EMERGENCY' ? 'Darurat' : 'Siaga'} Terkirim!`);
-            setSnackbarVisible(true);
-        } catch (error) {
-            console.error(error);
-            setSnackbarMessage('Gagal mengirim laporan: ' + error.message);
-            setSnackbarVisible(true);
-        } finally {
-            setLoading(false);
-        }
-    };
+  const confirmType = confirm.type;
+  const isEmergency = confirmType === 'EMERGENCY';
 
-    const showConfirm = (type) => {
-        setConfirmDialog({ visible: true, type });
-    };
-
-    return (
-        <View style={styles.container}>
-            <ScrollView contentContainerStyle={styles.content}>
-                <Surface style={styles.header} elevation={1}>
-                    <Text variant="titleMedium" style={styles.welcome}>Halo, {user.name}</Text>
-                    <Text variant="bodySmall" style={styles.phone}>{user.phone}</Text>
-                </Surface>
-
-                <View style={styles.buttonContainer}>
-                    <Text variant="headlineSmall" style={styles.sectionTitle}>Bantuan Cepat</Text>
-                    <Text variant="bodyMedium" style={styles.sectionSubtitle}>
-                        Tekan tombol di bawah untuk melaporkan kejadian di lingkungan Anda.
-                    </Text>
-
-                    <AlertButton
-                        title="DARURAT"
-                        type="EMERGENCY"
-                        icon="alert-circle"
-                        onPress={() => showConfirm('EMERGENCY')}
-                        loading={loading}
-                    />
-
-                    <AlertButton
-                        title="SIAGA / CAUTION"
-                        type="CAUTION"
-                        icon="alert-decagram"
-                        onPress={() => showConfirm('CAUTION')}
-                        loading={loading}
-                    />
-                </View>
-
-                {loading && (
-                    <View style={styles.loadingContainer}>
-                        <ActivityIndicator animating={true} color="#BB86FC" size="large" />
-                        <Text style={styles.loadingText}>Mengambil lokasi dan mengirim laporan...</Text>
-                    </View>
-                )}
-            </ScrollView>
-
-            {/* Confirmation Dialog */}
-            <Portal>
-                <Dialog
-                    visible={confirmDialog.visible}
-                    onDismiss={() => setConfirmDialog({ visible: false, type: '' })}
-                    style={styles.dialog}
-                >
-                    <Dialog.Title>Konfirmasi Laporan</Dialog.Title>
-                    <Dialog.Content>
-                        <Text variant="bodyMedium">
-                            Apakah Anda yakin ingin mengirim laporan {confirmDialog.type === 'EMERGENCY' ? 'Darurat (Merah)' : 'Siaga (Kuning)'}?
-                        </Text>
-                    </Dialog.Content>
-                    <Dialog.Actions>
-                        <Button onPress={() => setConfirmDialog({ visible: false, type: '' })}>Batal</Button>
-                        <Button
-                            onPress={() => sendAlert(confirmDialog.type)}
-                            textColor={confirmDialog.type === 'EMERGENCY' ? '#FF5252' : '#FFD740'}
-                        >
-                            KIRIM
-                        </Button>
-                    </Dialog.Actions>
-                </Dialog>
-            </Portal>
-
-            <Snackbar
-                visible={snackbarVisible}
-                onDismiss={() => setSnackbarVisible(false)}
-                duration={3000}
-                action={{
-                    label: 'OK',
-                    onPress: () => setSnackbarVisible(false),
-                }}
-            >
-                {snackbarMessage}
-            </Snackbar>
+  return (
+    <View style={styles.container}>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Welcome card with live date/time */}
+        <View style={[styles.welcomeCard, elevation.md]}>
+          <View style={styles.welcomeRow}>
+            <MaterialCommunityIcons name="account-circle" size={44} color={colors.onPrimary} />
+            <View style={styles.welcomeText}>
+              <Text style={styles.welcomeHi}>Halo,</Text>
+              <Text style={styles.welcomeName} numberOfLines={1}>{user.name}</Text>
+            </View>
+          </View>
+          <View style={styles.clockRow}>
+            <Text style={styles.time}>
+              {now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+            </Text>
+            <Text style={styles.date}>{now.toLocaleDateString('id-ID', DATE_OPTS)}</Text>
+          </View>
         </View>
-    );
+
+        {/* Live status indicators */}
+        <View style={styles.statusRow}>
+          <StatusChip icon={gps.enabled && gps.granted ? 'crosshairs-gps' : 'crosshairs-off'}
+            label={gps.enabled && gps.granted ? 'GPS Aktif' : 'GPS Mati'} ok={gps.enabled && gps.granted} />
+          <StatusChip icon={online ? 'wifi' : 'wifi-off'}
+            label={online ? 'Internet Aktif' : 'Tidak Terhubung'} ok={online} />
+        </View>
+
+        <SectionHeader
+          title="Bantuan Cepat"
+          subtitle="Tekan tombol di bawah untuk melaporkan kejadian di lingkungan Anda."
+          style={styles.section}
+        />
+
+        <AlertButton
+          title="DARURAT"
+          subtitle="Situasi mengancam jiwa"
+          type="EMERGENCY"
+          icon="alert-circle"
+          onPress={() => setConfirm({ visible: true, type: 'EMERGENCY' })}
+          disabled={loading}
+        />
+        <AlertButton
+          title="SIAGA"
+          subtitle="Perlu perhatian / kewaspadaan"
+          type="CAUTION"
+          icon="alert-decagram"
+          onPress={() => setConfirm({ visible: true, type: 'CAUTION' })}
+          disabled={loading}
+        />
+
+        <InfoCard title="Petunjuk Darurat" icon="information-outline" style={styles.section}>
+          {INSTRUCTIONS.map((text, i) => (
+            <View key={i} style={styles.instructionRow}>
+              <MaterialCommunityIcons name="check-circle" size={18} color={colors.success} />
+              <Text style={styles.instructionText}>{text}</Text>
+            </View>
+          ))}
+        </InfoCard>
+      </ScrollView>
+
+      <ConfirmationDialog
+        visible={confirm.visible}
+        onDismiss={() => setConfirm({ visible: false, type: '' })}
+        onConfirm={() => sendAlert(confirmType)}
+        title="Konfirmasi Laporan"
+        message={`Kirim laporan ${isEmergency ? 'DARURAT (Merah)' : 'SIAGA (Kuning)'}? Lokasi Anda akan dibagikan ke petugas.`}
+        confirmLabel="Kirim Sekarang"
+        tone={isEmergency ? 'emergency' : 'warning'}
+      />
+
+      <LoadingOverlay visible={loading} message="Mengambil lokasi dan mengirim laporan..." />
+
+      <AppSnackbar
+        visible={snack.visible}
+        onDismiss={() => setSnack((s) => ({ ...s, visible: false }))}
+        message={snack.message}
+        variant={snack.variant}
+      />
+    </View>
+  );
 };
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#121212',
-    },
-    content: {
-        paddingBottom: 20,
-    },
-    header: {
-        padding: 20,
-        backgroundColor: '#1E1E1E',
-        borderBottomLeftRadius: 20,
-        borderBottomRightRadius: 20,
-        marginBottom: 20,
-    },
-    welcome: {
-        color: '#BB86FC',
-        fontWeight: 'bold',
-    },
-    phone: {
-        color: 'rgba(255, 255, 255, 0.6)',
-    },
-    buttonContainer: {
-        padding: 20,
-    },
-    sectionTitle: {
-        color: '#fff',
-        fontWeight: 'bold',
-        marginBottom: 4,
-    },
-    sectionSubtitle: {
-        color: 'rgba(255, 255, 255, 0.7)',
-        marginBottom: 20,
-    },
-    loadingContainer: {
-        marginTop: 20,
-        alignItems: 'center',
-    },
-    loadingText: {
-        marginTop: 10,
-        color: '#BB86FC',
-    },
-    dialog: {
-        backgroundColor: '#1E1E1E',
-    }
+  container: { flex: 1, backgroundColor: colors.background },
+  content: { padding: spacing.lg, paddingBottom: spacing.xxl },
+  welcomeCard: {
+    backgroundColor: colors.primary,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.lg,
+  },
+  welcomeRow: { flexDirection: 'row', alignItems: 'center' },
+  welcomeText: { marginLeft: spacing.md, flex: 1 },
+  welcomeHi: { ...typography.caption, color: 'rgba(255,255,255,0.85)' },
+  welcomeName: { ...typography.sectionTitle, color: colors.onPrimary },
+  clockRow: { marginTop: spacing.lg },
+  time: { ...typography.screenTitle, color: colors.onPrimary, fontVariant: ['tabular-nums'] },
+  date: { ...typography.body, color: 'rgba(255,255,255,0.85)', marginTop: spacing.xs },
+  statusRow: { flexDirection: 'row', gap: spacing.md, marginBottom: spacing.lg },
+  section: { marginTop: spacing.sm },
+  instructionRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: spacing.md },
+  instructionText: { ...typography.body, color: colors.textPrimary, marginLeft: spacing.sm, flex: 1 },
 });
 
 export default UserHomeScreen;

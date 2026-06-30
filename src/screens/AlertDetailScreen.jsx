@@ -1,198 +1,170 @@
-import React, { useState } from 'react';
-import { View, StyleSheet, ScrollView, Dimensions, Linking } from 'react-native';
-import { Text, Surface, Button, Divider, SegmentedButtons, Snackbar, Card } from 'react-native-paper';
+import React, { useState, useCallback } from 'react';
+import { View, StyleSheet, ScrollView, Linking } from 'react-native';
+import { Text, SegmentedButtons } from 'react-native-paper';
 import { ref, update } from 'firebase/database';
-import { db } from '../services/firebase';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { db } from '../services/firebase';
 import MapDisplay from '../components/MapDisplay';
+import InfoCard from '../components/InfoCard';
+import StatusBadge from '../components/StatusBadge';
+import SectionHeader from '../components/SectionHeader';
+import PrimaryButton from '../components/PrimaryButton';
+import AppSnackbar from '../components/AppSnackbar';
+import { alertTypeColors, colors } from '../theme/colors';
+import { typography } from '../theme/typography';
+import { spacing } from '../theme/spacing';
+import { radius } from '../theme/radius';
+import { elevation } from '../theme/elevation';
 
-const { width } = Dimensions.get('window');
+const STATUS_BUTTONS = [
+  { value: 'PENDING', label: 'Menunggu' },
+  { value: 'RESPONDING', label: 'Proses' },
+  { value: 'COMPLETED', label: 'Selesai' },
+];
 
-const AlertDetailScreen = ({ route, navigation }) => {
-    const { alert } = route.params;
-    const [status, setStatus] = useState(alert.status);
-    const [loading, setLoading] = useState(false);
-    const [visible, setVisible] = useState(false);
-    const [message, setMessage] = useState('');
-
-    const updateStatus = async (newStatus) => {
-        setLoading(true);
-        try {
-            await update(ref(db, `alerts/${alert.alertId}`), {
-                status: newStatus,
-                updatedAt: new Date().toISOString(),
-            });
-            setStatus(newStatus);
-            setMessage('Status laporan diperbarui');
-            setVisible(true);
-        } catch (error) {
-            console.error(error);
-            setMessage('Gagal memperbarui status');
-            setVisible(true);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const openInGoogleMaps = () => {
-        const url = `https://www.google.com/maps/search/?api=1&query=${alert.latitude},${alert.longitude}`;
-        Linking.openURL(url);
-    };
-
-    return (
-        <View style={styles.container}>
-            <ScrollView>
-                {/* Map View */}
-                <Surface style={styles.mapContainer} elevation={2}>
-                    <MapDisplay alert={alert} />
-                    <Button
-                        mode="contained"
-                        icon="google-maps"
-                        style={styles.mapButton}
-                        onPress={openInGoogleMaps}
-                    >
-                        BUKA MAPS
-                    </Button>
-                </Surface>
-
-                <View style={styles.content}>
-                    <Card style={styles.infoCard}>
-                        <Card.Content>
-                            <View style={styles.headerRow}>
-                                <Text variant="headlineSmall" style={styles.userName}>{alert.userName}</Text>
-                                <Surface
-                                    style={[
-                                        styles.typeTag,
-                                        { backgroundColor: alert.type === 'EMERGENCY' ? '#FF5252' : '#FFD740' }
-                                    ]}
-                                >
-                                    <Text style={[styles.typeTagText, { color: alert.type === 'EMERGENCY' ? '#fff' : '#000' }]}>
-                                        {alert.type}
-                                    </Text>
-                                </Surface>
-                            </View>
-
-                            <Divider style={styles.divider} />
-
-                            <ListRow icon="phone" label="Ponsel" value={alert.phone} />
-                            <ListRow icon="map-marker" label="Alamat" value={alert.address} multiline />
-                            <ListRow icon="clock-outline" label="Waktu" value={new Date(alert.createdAt).toLocaleString('id-ID')} />
-                        </Card.Content>
-                    </Card>
-
-                    <Text variant="titleMedium" style={styles.sectionTitle}>Update Status Penanganan</Text>
-                    <SegmentedButtons
-                        value={status}
-                        onValueChange={updateStatus}
-                        buttons={[
-                            { value: 'PENDING', label: 'PENDING', checkedColor: '#FF5252' },
-                            { value: 'RESPONDING', label: 'PROSES', checkedColor: '#FFD740' },
-                            { value: 'COMPLETED', label: 'SELESAI', checkedColor: '#4CAF50' },
-                        ]}
-                        style={styles.segmented}
-                    />
-                </View>
-            </ScrollView>
-
-            <Snackbar
-                visible={visible}
-                onDismiss={() => setVisible(false)}
-                duration={2000}
-            >
-                {message}
-            </Snackbar>
-        </View>
-    );
+const formatTime = (value) => {
+  if (!value) return '-';
+  try {
+    return new Date(value).toLocaleString('id-ID', {
+      weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+      hour: '2-digit', minute: '2-digit',
+    });
+  } catch {
+    return '-';
+  }
 };
 
-const ListRow = ({ icon, label, value, multiline }) => (
-    <View style={styles.row}>
-        <MaterialCommunityIcons name={icon} size={24} color="#BB86FC" style={styles.rowIcon} />
-        <View style={styles.rowText}>
-            <Text variant="labelSmall" style={styles.rowLabel}>{label}</Text>
-            <Text variant="bodyLarge" style={styles.rowValue} numberOfLines={multiline ? undefined : 1}>
-                {value}
-            </Text>
-        </View>
+const DetailRow = ({ icon, label, value, multiline }) => (
+  <View style={styles.row}>
+    <MaterialCommunityIcons name={icon} size={22} color={colors.primary} style={styles.rowIcon} />
+    <View style={styles.rowText}>
+      <Text style={styles.rowLabel}>{label}</Text>
+      <Text style={styles.rowValue} numberOfLines={multiline ? undefined : 1}>{value || '-'}</Text>
     </View>
+  </View>
 );
 
+const AlertDetailScreen = ({ route }) => {
+  const { alert } = route.params;
+  const [status, setStatus] = useState(alert.status);
+  const [updating, setUpdating] = useState(false);
+  const [snack, setSnack] = useState({ visible: false, message: '', variant: 'success' });
+
+  const { base, on } = alertTypeColors(alert.type);
+  const isEmergency = alert.type === 'EMERGENCY';
+
+  const updateStatus = useCallback(async (newStatus) => {
+    if (newStatus === status || updating) return;
+    const prev = status;
+    setStatus(newStatus);
+    setUpdating(true);
+    try {
+      await update(ref(db, `alerts/${alert.alertId}`), {
+        status: newStatus,
+        updatedAt: new Date().toISOString(),
+      });
+      setSnack({ visible: true, variant: 'success', message: 'Status laporan diperbarui.' });
+    } catch {
+      setStatus(prev); // revert optimistic update on failure
+      setSnack({ visible: true, variant: 'error', message: 'Gagal memperbarui status.' });
+    } finally {
+      setUpdating(false);
+    }
+  }, [alert.alertId, status, updating]);
+
+  const openInGoogleMaps = useCallback(async () => {
+    const url = `https://www.google.com/maps/search/?api=1&query=${alert.latitude},${alert.longitude}`;
+    try {
+      await Linking.openURL(url);
+    } catch {
+      setSnack({ visible: true, variant: 'error', message: 'Tidak dapat membuka Google Maps.' });
+    }
+  }, [alert.latitude, alert.longitude]);
+
+  return (
+    <View style={styles.container}>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <View style={[styles.mapContainer, elevation.sm]}>
+          <MapDisplay alert={alert} />
+        </View>
+
+        <PrimaryButton
+          label="Buka di Google Maps"
+          icon="google-maps"
+          onPress={openInGoogleMaps}
+          style={styles.mapsButton}
+        />
+
+        <InfoCard style={styles.card}>
+          <View style={styles.headerRow}>
+            <View style={styles.typeRow}>
+              <MaterialCommunityIcons
+                name={isEmergency ? 'alert-circle' : 'alert-decagram'}
+                size={26}
+                color={base}
+              />
+              <View style={styles.typeText}>
+                <Text style={[styles.typeLabel, { color: base }]}>{isEmergency ? 'DARURAT' : 'SIAGA'}</Text>
+                <Text style={styles.userName} numberOfLines={1}>{alert.userName}</Text>
+              </View>
+            </View>
+            <StatusBadge status={status} />
+          </View>
+
+          <View style={styles.divider} />
+
+          <DetailRow icon="phone" label="Nomor Ponsel" value={alert.phone} />
+          <DetailRow icon="map-marker" label="Alamat" value={alert.address} multiline />
+          <DetailRow icon="crosshairs-gps" label="Koordinat"
+            value={`${alert.latitude?.toFixed(6)}, ${alert.longitude?.toFixed(6)}`} />
+          <DetailRow icon="clock-outline" label="Waktu Lapor" value={formatTime(alert.createdAt)} />
+        </InfoCard>
+
+        <SectionHeader title="Perbarui Status Penanganan" style={styles.section} />
+        <SegmentedButtons
+          value={status}
+          onValueChange={updateStatus}
+          buttons={STATUS_BUTTONS.map((b) => ({ ...b, disabled: updating }))}
+          style={styles.segmented}
+        />
+      </ScrollView>
+
+      <AppSnackbar
+        visible={snack.visible}
+        onDismiss={() => setSnack((s) => ({ ...s, visible: false }))}
+        message={snack.message}
+        variant={snack.variant}
+        duration={2000}
+      />
+    </View>
+  );
+};
+
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#121212',
-    },
-    mapContainer: {
-        height: 300,
-        width: '100%',
-        overflow: 'hidden',
-    },
-    map: {
-        ...StyleSheet.absoluteFillObject,
-    },
-    mapButton: {
-        position: 'absolute',
-        bottom: 16,
-        right: 16,
-        borderRadius: 30,
-    },
-    content: {
-        padding: 16,
-    },
-    infoCard: {
-        backgroundColor: '#1E1E1E',
-        marginBottom: 24,
-        borderRadius: 16,
-    },
-    headerRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-    },
-    userName: {
-        color: '#fff',
-        fontWeight: 'bold',
-    },
-    typeTag: {
-        paddingHorizontal: 12,
-        paddingVertical: 4,
-        borderRadius: 20,
-    },
-    typeTagText: {
-        fontWeight: 'bold',
-        fontSize: 12,
-    },
-    divider: {
-        marginVertical: 16,
-        backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    },
-    row: {
-        flexDirection: 'row',
-        marginBottom: 16,
-        alignItems: 'flex-start',
-    },
-    rowIcon: {
-        marginTop: 4,
-    },
-    rowText: {
-        marginLeft: 16,
-        flex: 1,
-    },
-    rowLabel: {
-        color: 'rgba(255, 255, 255, 0.4)',
-        marginBottom: 2,
-    },
-    rowValue: {
-        color: '#fff',
-    },
-    sectionTitle: {
-        color: '#BB86FC',
-        fontWeight: 'bold',
-        marginBottom: 12,
-    },
-    segmented: {
-        marginBottom: 30,
-    },
+  container: { flex: 1, backgroundColor: colors.background },
+  content: { padding: spacing.lg, paddingBottom: spacing.xxl },
+  mapContainer: {
+    height: 260,
+    width: '100%',
+    borderRadius: radius.lg,
+    overflow: 'hidden',
+    backgroundColor: colors.surfaceVariant,
+  },
+  mapsButton: { marginTop: spacing.md },
+  card: { marginTop: spacing.lg },
+  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  typeRow: { flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: spacing.sm },
+  typeText: { marginLeft: spacing.md, flex: 1 },
+  typeLabel: { ...typography.captionStrong, letterSpacing: 0.5 },
+  userName: { ...typography.sectionTitle, color: colors.textPrimary },
+  divider: { height: 1, backgroundColor: colors.divider, marginVertical: spacing.lg },
+  row: { flexDirection: 'row', marginBottom: spacing.lg, alignItems: 'flex-start' },
+  rowIcon: { marginTop: 2 },
+  rowText: { marginLeft: spacing.md, flex: 1 },
+  rowLabel: { ...typography.caption, color: colors.textSecondary, marginBottom: 2 },
+  rowValue: { ...typography.body, color: colors.textPrimary },
+  section: { marginTop: spacing.xl },
+  segmented: { marginTop: spacing.xs },
 });
 
 export default AlertDetailScreen;

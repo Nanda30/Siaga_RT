@@ -1,191 +1,198 @@
-import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
-import { Text, Surface, Badge, Card, List, Divider, ActivityIndicator } from 'react-native-paper';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { View, StyleSheet, FlatList } from 'react-native';
+import { Text, Searchbar, ActivityIndicator } from 'react-native-paper';
 import { ref, onValue, query, orderByChild } from 'firebase/database';
-import { db } from '../services/firebase';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { db } from '../services/firebase';
+import AlertCard from '../components/AlertCard';
+import EmptyState from '../components/EmptyState';
+import AppSnackbar from '../components/AppSnackbar';
+import { colors } from '../theme/colors';
+import { typography } from '../theme/typography';
+import { spacing } from '../theme/spacing';
+import { radius } from '../theme/radius';
+import { elevation } from '../theme/elevation';
+
+const FILTERS = [
+  { key: 'ALL', label: 'Semua', icon: 'format-list-bulleted' },
+  { key: 'PENDING', label: 'Menunggu', icon: 'clock-alert' },
+  { key: 'RESPONDING', label: 'Ditangani', icon: 'progress-wrench' },
+  { key: 'COMPLETED', label: 'Selesai', icon: 'check-circle' },
+];
+
+const SummaryCard = ({ label, count, color, active }) => (
+  <View style={[styles.summaryCard, elevation.sm, active && { borderColor: color, borderWidth: 2 }]}>
+    <Text style={[styles.summaryCount, { color }]}>{count}</Text>
+    <Text style={styles.summaryLabel} numberOfLines={1}>{label}</Text>
+  </View>
+);
 
 const AdminDashboardScreen = ({ navigation }) => {
-    const [alerts, setAlerts] = useState([]);
-    const [loading, setLoading] = useState(true);
+  const [alerts, setAlerts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [filter, setFilter] = useState('ALL');
+  const [error, setError] = useState(false);
 
-    useEffect(() => {
-        const alertsRef = query(ref(db, 'alerts'), orderByChild('createdAt'));
-
-        // Real-time listener for alerts
-        const unsubscribe = onValue(alertsRef, (snapshot) => {
-            const data = snapshot.val();
-            if (data) {
-                const sortedAlerts = Object.values(data).sort((a, b) => b.createdAt - a.createdAt);
-                setAlerts(sortedAlerts);
-            } else {
-                setAlerts([]);
-            }
-            setLoading(false);
-        });
-
-        return () => unsubscribe();
-    }, []);
-
-    const getStatusColor = (status) => {
-        switch (status) {
-            case 'PENDING': return '#FF5252';
-            case 'RESPONDING': return '#FFD740';
-            case 'COMPLETED': return '#4CAF50';
-            default: return '#999';
-        }
-    };
-
-    const renderItem = ({ item }) => (
-        <Card
-            style={styles.card}
-            onPress={() => navigation.navigate('AlertDetail', { alert: item })}
-        >
-            <Card.Content>
-                <View style={styles.cardHeader}>
-                    <View style={styles.typeBadge}>
-                        <MaterialCommunityIcons
-                            name={item.type === 'EMERGENCY' ? 'alert-circle' : 'alert-decagram'}
-                            size={24}
-                            color={item.type === 'EMERGENCY' ? '#FF5252' : '#FFD740'}
-                        />
-                        <Text style={[styles.typeText, { color: item.type === 'EMERGENCY' ? '#FF5252' : '#FFD740' }]}>
-                            {item.type}
-                        </Text>
-                    </View>
-                    <Badge style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
-                        {item.status}
-                    </Badge>
-                </View>
-
-                <Text variant="titleMedium" style={styles.userName}>{item.userName}</Text>
-                <View style={styles.infoRow}>
-                    <MaterialCommunityIcons name="phone" size={16} color="rgba(255,255,255,0.6)" />
-                    <Text variant="bodySmall" style={styles.infoText}>{item.phone}</Text>
-                </View>
-                <View style={styles.infoRow}>
-                    <MaterialCommunityIcons name="map-marker" size={16} color="rgba(255,255,255,0.6)" />
-                    <Text variant="bodySmall" style={styles.infoText} numberOfLines={1}>{item.address}</Text>
-                </View>
-
-                <Divider style={styles.divider} />
-
-                <Text variant="labelSmall" style={styles.timeText}>
-                    {new Date(item.createdAt).toLocaleString('id-ID')}
-                </Text>
-            </Card.Content>
-        </Card>
+  useEffect(() => {
+    const alertsRef = query(ref(db, 'alerts'), orderByChild('createdAt'));
+    const unsubscribe = onValue(
+      alertsRef,
+      (snapshot) => {
+        const data = snapshot.val();
+        const list = data
+          ? Object.values(data).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
+          : [];
+        setAlerts(list);
+        setLoading(false);
+      },
+      () => {
+        setError(true);
+        setLoading(false);
+      }
     );
+    return () => unsubscribe();
+  }, []);
 
+  const counts = useMemo(() => ({
+    PENDING: alerts.filter((a) => a.status === 'PENDING').length,
+    RESPONDING: alerts.filter((a) => a.status === 'RESPONDING').length,
+    COMPLETED: alerts.filter((a) => a.status === 'COMPLETED').length,
+  }), [alerts]);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return alerts.filter((a) => {
+      if (filter !== 'ALL' && a.status !== filter) return false;
+      if (!q) return true;
+      return (
+        a.userName?.toLowerCase().includes(q) ||
+        a.phone?.toLowerCase().includes(q) ||
+        a.address?.toLowerCase().includes(q)
+      );
+    });
+  }, [alerts, search, filter]);
+
+  const renderItem = useCallback(
+    ({ item }) => (
+      <AlertCard alert={item} onPress={() => navigation.navigate('AlertDetail', { alert: item })} />
+    ),
+    [navigation]
+  );
+
+  const keyExtractor = useCallback((item) => item.alertId, []);
+
+  if (loading) {
     return (
-        <View style={styles.container}>
-            <Surface style={styles.header} elevation={1}>
-                <Text variant="titleLarge" style={styles.headerTitle}>Monitoring Laporan</Text>
-                <Text variant="bodySmall" style={styles.headerSubtitle}>
-                    {alerts.length} Laporan Diterima
-                </Text>
-            </Surface>
-
-            {loading ? (
-                <View style={styles.center}>
-                    <ActivityIndicator animating={true} color="#BB86FC" size="large" />
-                </View>
-            ) : (
-                <FlatList
-                    data={alerts}
-                    renderItem={renderItem}
-                    keyExtractor={(item) => item.alertId}
-                    contentContainerStyle={styles.list}
-                    ListEmptyComponent={
-                        <View style={styles.empty}>
-                            <MaterialCommunityIcons name="shield-check" size={80} color="rgba(255,255,255,0.2)" />
-                            <Text style={styles.emptyText}>Tidak ada laporan aktif</Text>
-                        </View>
-                    }
-                />
-            )}
-        </View>
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={styles.loadingText}>Memuat laporan...</Text>
+      </View>
     );
+  }
+
+  return (
+    <View style={styles.container}>
+      <FlatList
+        data={filtered}
+        renderItem={renderItem}
+        keyExtractor={keyExtractor}
+        contentContainerStyle={styles.list}
+        showsVerticalScrollIndicator={false}
+        ListHeaderComponent={
+          <View>
+            <View style={styles.summaryRow}>
+              <SummaryCard label="Menunggu" count={counts.PENDING} color={colors.emergency} active={filter === 'PENDING'} />
+              <SummaryCard label="Ditangani" count={counts.RESPONDING} color={colors.warning} active={filter === 'RESPONDING'} />
+              <SummaryCard label="Selesai" count={counts.COMPLETED} color={colors.success} active={filter === 'COMPLETED'} />
+            </View>
+
+            <Searchbar
+              placeholder="Cari nama, telepon, alamat"
+              value={search}
+              onChangeText={setSearch}
+              style={styles.search}
+              inputStyle={typography.body}
+              elevation={1}
+            />
+
+            <FlatList
+              horizontal
+              data={FILTERS}
+              keyExtractor={(f) => f.key}
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.filterRow}
+              renderItem={({ item: f }) => {
+                const active = filter === f.key;
+                return (
+                  <Text
+                    onPress={() => setFilter(f.key)}
+                    style={[styles.filterChip, active && styles.filterChipActive]}
+                  >
+                    {f.label}
+                  </Text>
+                );
+              }}
+            />
+          </View>
+        }
+        ListEmptyComponent={
+          <EmptyState
+            icon="shield-check"
+            title={search || filter !== 'ALL' ? 'Tidak ada hasil' : 'Belum ada laporan'}
+            message={search || filter !== 'ALL'
+              ? 'Coba ubah kata kunci atau filter.'
+              : 'Laporan dari warga akan muncul di sini secara langsung.'}
+          />
+        }
+      />
+
+      <AppSnackbar
+        visible={error}
+        onDismiss={() => setError(false)}
+        message="Gagal memuat laporan. Periksa koneksi internet."
+        variant="error"
+      />
+    </View>
+  );
 };
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#121212',
-    },
-    header: {
-        padding: 20,
-        backgroundColor: '#1E1E1E',
-    },
-    headerTitle: {
-        color: '#BB86FC',
-        fontWeight: 'bold',
-    },
-    headerSubtitle: {
-        color: 'rgba(255, 255, 255, 0.6)',
-    },
-    list: {
-        padding: 16,
-    },
-    card: {
-        marginBottom: 16,
-        backgroundColor: '#1E1E1E',
-    },
-    cardHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 12,
-    },
-    typeBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    typeText: {
-        marginLeft: 6,
-        fontWeight: 'bold',
-        fontSize: 14,
-    },
-    statusBadge: {
-        paddingHorizontal: 12,
-    },
-    userName: {
-        color: '#fff',
-        fontWeight: 'bold',
-        marginBottom: 4,
-    },
-    infoRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: 4,
-    },
-    infoText: {
-        color: 'rgba(255, 255, 255, 0.7)',
-        marginLeft: 8,
-    },
-    divider: {
-        marginVertical: 10,
-        backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    },
-    timeText: {
-        color: 'rgba(255, 255, 255, 0.4)',
-        textAlign: 'right',
-    },
-    center: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    empty: {
-        flex: 1,
-        alignItems: 'center',
-        marginTop: 100,
-    },
-    emptyText: {
-        marginTop: 16,
-        color: 'rgba(255, 255, 255, 0.4)',
-        fontSize: 18,
-    },
+  container: { flex: 1, backgroundColor: colors.background },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background },
+  loadingText: { ...typography.body, color: colors.textSecondary, marginTop: spacing.md },
+  list: { padding: spacing.lg, flexGrow: 1 },
+  summaryRow: { flexDirection: 'row', gap: spacing.md, marginBottom: spacing.lg },
+  summaryCard: {
+    flex: 1,
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.sm,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.divider,
+  },
+  summaryCount: { ...typography.screenTitle },
+  summaryLabel: { ...typography.caption, color: colors.textSecondary, marginTop: spacing.xs },
+  search: { backgroundColor: colors.surface, borderRadius: radius.md, marginBottom: spacing.md },
+  filterRow: { gap: spacing.sm, paddingBottom: spacing.lg },
+  filterChip: {
+    ...typography.captionStrong,
+    color: colors.textSecondary,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.divider,
+    borderRadius: radius.pill,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    overflow: 'hidden',
+  },
+  filterChipActive: {
+    color: colors.onPrimary,
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
 });
 
 export default AdminDashboardScreen;

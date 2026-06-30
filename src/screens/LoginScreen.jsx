@@ -1,169 +1,181 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, Image, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
-import { TextInput, Button, Text, SegmentedButtons, Surface, Snackbar, ActivityIndicator } from 'react-native-paper';
+import {
+  View,
+  StyleSheet,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  Keyboard,
+} from 'react-native';
+import { TextInput, Text, SegmentedButtons } from 'react-native-paper';
 import { ref, set } from 'firebase/database';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { db } from '../services/firebase';
-import { useTheme } from 'react-native-paper';
+import PrimaryButton from '../components/PrimaryButton';
+import AppSnackbar from '../components/AppSnackbar';
+import { colors } from '../theme/colors';
+import { typography } from '../theme/typography';
+import { spacing } from '../theme/spacing';
+import { radius } from '../theme/radius';
+import { elevation } from '../theme/elevation';
 
 const LoginScreen = ({ navigation }) => {
-    const theme = useTheme();
-    const [name, setName] = useState('');
-    const [phone, setPhone] = useState('');
-    const [role, setRole] = useState('Warga');
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState('');
-    const [visible, setVisible] = useState(false);
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [role, setRole] = useState('Warga');
+  const [loading, setLoading] = useState(false);
+  const [snack, setSnack] = useState({ visible: false, message: '', variant: 'error' });
 
-    const handleLogin = async () => {
-        if (!name || !phone) {
-            setError('Harap isi nama dan nomor telepon');
-            setVisible(true);
-            return;
-        }
+  const showError = (message) =>
+    setSnack({ visible: true, message, variant: 'error' });
 
-        setLoading(true);
-        try {
-            // Simple unique ID based on phone number (for Phase 1)
-            const uid = phone.replace(/[^0-9]/g, '');
+  const validate = () => {
+    if (!name.trim()) {
+      showError('Harap isi nama lengkap Anda.');
+      return false;
+    }
+    const digits = phone.replace(/[^0-9]/g, '');
+    if (digits.length < 9) {
+      showError('Nomor telepon tidak valid (minimal 9 digit).');
+      return false;
+    }
+    return true;
+  };
 
-            // Save user profile to Firebase
-            await set(ref(db, `users/${uid}`), {
-                uid,
-                name,
-                phone,
-                role,
-                createdAt: new Date().toISOString(),
-            });
+  const handleLogin = async () => {
+    Keyboard.dismiss();
+    if (!validate()) return;
 
-            setLoading(false);
+    setLoading(true);
+    try {
+      const uid = phone.replace(/[^0-9]/g, '');
+      const user = { uid, name: name.trim(), phone: phone.trim(), role };
 
-            // Navigate based on role
-            if (role === 'Warga') {
-                navigation.replace('UserHome', { user: { uid, name, phone, role } });
-            } else {
-                navigation.replace('AdminDashboard', { user: { uid, name, phone, role } });
-            }
-        } catch (err) {
-            setLoading(false);
-            setError('Gagal masuk: ' + err.message);
-            setVisible(true);
-        }
-    };
+      await set(ref(db, `users/${uid}`), {
+        ...user,
+        createdAt: new Date().toISOString(),
+      });
 
-    return (
-        <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            style={styles.container}
-        >
-            <ScrollView contentContainerStyle={styles.scrollContent}>
-                <Surface style={styles.surface} elevation={2}>
-                    <Text variant="headlineMedium" style={styles.title}>SiagaRT</Text>
-                    <Text variant="bodyMedium" style={styles.subtitle}>Sistem Informasi Keamanan Warga</Text>
+      navigation.replace(role === 'Warga' ? 'UserHome' : 'AdminDashboard', { user });
+    } catch (err) {
+      showError('Gagal masuk: ' + (err?.message || 'Periksa koneksi internet Anda.'));
+    } finally {
+      setLoading(false);
+    }
+  };
 
-                    <TextInput
-                        label="Nama Lengkap"
-                        value={name}
-                        onChangeText={setName}
-                        mode="outlined"
-                        style={styles.input}
-                        left={<TextInput.Icon icon="account" />}
-                    />
+  return (
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      style={styles.container}
+    >
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.logoContainer}>
+          <View style={styles.logoCircle}>
+            <MaterialCommunityIcons name="shield-check" size={56} color={colors.onPrimary} />
+          </View>
+          <Text style={styles.appName}>SiagaRT</Text>
+          <Text style={styles.subtitle}>Sistem Informasi Keamanan Warga</Text>
+        </View>
 
-                    <TextInput
-                        label="Nomor Telepon"
-                        value={phone}
-                        onChangeText={setPhone}
-                        mode="outlined"
-                        keyboardType="phone-pad"
-                        style={styles.input}
-                        left={<TextInput.Icon icon="phone" />}
-                    />
+        <View style={[styles.card, elevation.md]}>
+          <TextInput
+            label="Nama Lengkap"
+            value={name}
+            onChangeText={setName}
+            mode="outlined"
+            style={styles.input}
+            autoCapitalize="words"
+            returnKeyType="next"
+            left={<TextInput.Icon icon="account" />}
+          />
 
-                    <Text style={styles.label}>Pilih Peran:</Text>
-                    <SegmentedButtons
-                        value={role}
-                        onValueChange={setRole}
-                        buttons={[
-                            { value: 'Warga', label: 'Warga' },
-                            { value: 'Satpam', label: 'Satpam' },
-                        ]}
-                        style={styles.segmented}
-                    />
+          <TextInput
+            label="Nomor Telepon"
+            value={phone}
+            onChangeText={setPhone}
+            mode="outlined"
+            keyboardType="phone-pad"
+            style={styles.input}
+            returnKeyType="done"
+            onSubmitEditing={handleLogin}
+            left={<TextInput.Icon icon="phone" />}
+          />
 
-                    <Button
-                        mode="contained"
-                        onPress={handleLogin}
-                        loading={loading}
-                        disabled={loading}
-                        style={styles.button}
-                        contentStyle={styles.buttonContent}
-                    >
-                        MASUK
-                    </Button>
-                </Surface>
-            </ScrollView>
+          <Text style={styles.label}>Pilih Peran</Text>
+          <SegmentedButtons
+            value={role}
+            onValueChange={setRole}
+            buttons={[
+              { value: 'Warga', label: 'Warga', icon: 'account' },
+              { value: 'Satpam', label: 'Petugas', icon: 'shield-account' },
+            ]}
+            style={styles.segmented}
+          />
 
-            <Snackbar
-                visible={visible}
-                onDismiss={() => setVisible(false)}
-                action={{
-                    label: 'OK',
-                    onPress: () => setVisible(false),
-                }}
-            >
-                {error}
-            </Snackbar>
-        </KeyboardAvoidingView>
-    );
+          <PrimaryButton
+            label="MASUK"
+            icon="login"
+            onPress={handleLogin}
+            loading={loading}
+            style={styles.button}
+          />
+        </View>
+
+        <Text style={styles.footer}>Aplikasi keamanan lingkungan untuk warga dan petugas.</Text>
+      </ScrollView>
+
+      <AppSnackbar
+        visible={snack.visible}
+        onDismiss={() => setSnack((s) => ({ ...s, visible: false }))}
+        message={snack.message}
+        variant={snack.variant}
+      />
+    </KeyboardAvoidingView>
+  );
 };
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#121212',
-    },
-    scrollContent: {
-        flexGrow: 1,
-        justifyContent: 'center',
-        padding: 20,
-    },
-    surface: {
-        padding: 24,
-        borderRadius: 16,
-        backgroundColor: '#1E1E1E',
-        alignItems: 'center',
-    },
-    title: {
-        fontWeight: 'bold',
-        color: '#BB86FC',
-        marginBottom: 4,
-    },
-    subtitle: {
-        color: '#rgba(255, 255, 255, 0.7)',
-        marginBottom: 30,
-    },
-    input: {
-        width: '100%',
-        marginBottom: 16,
-    },
-    label: {
-        alignSelf: 'start',
-        marginBottom: 8,
-        color: '#fff',
-        fontSize: 16,
-    },
-    segmented: {
-        width: '100%',
-        marginBottom: 24,
-    },
-    button: {
-        width: '100%',
-        marginTop: 10,
-        borderRadius: 8,
-    },
-    buttonContent: {
-        paddingVertical: 8,
-    },
+  container: { flex: 1, backgroundColor: colors.background },
+  scrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    padding: spacing.xl,
+  },
+  logoContainer: { alignItems: 'center', marginBottom: spacing.xxl },
+  logoCircle: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.lg,
+    ...elevation.md,
+  },
+  appName: { ...typography.screenTitle, color: colors.primary },
+  subtitle: { ...typography.body, color: colors.textSecondary, marginTop: spacing.xs, textAlign: 'center' },
+  card: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: spacing.xl,
+    borderWidth: 1,
+    borderColor: colors.divider,
+  },
+  input: { marginBottom: spacing.lg, backgroundColor: colors.surface },
+  label: { ...typography.bodyStrong, color: colors.textPrimary, marginBottom: spacing.sm },
+  segmented: { marginBottom: spacing.xl },
+  button: { marginTop: spacing.xs },
+  footer: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginTop: spacing.xl,
+  },
 });
 
 export default LoginScreen;
