@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { View, StyleSheet, ScrollView, Linking } from 'react-native';
+import { View, StyleSheet, ScrollView, Linking, Pressable } from 'react-native';
 import { Text, SegmentedButtons } from 'react-native-paper';
 import { ref, update } from 'firebase/database';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -12,7 +12,7 @@ import PrimaryButton from '../components/PrimaryButton';
 import AppSnackbar from '../components/AppSnackbar';
 import { alertTypeColors, colors } from '../theme/colors';
 import { typography } from '../theme/typography';
-import { spacing } from '../theme/spacing';
+import { spacing, TOUCH_TARGET } from '../theme/spacing';
 import { radius } from '../theme/radius';
 import { elevation } from '../theme/elevation';
 
@@ -43,6 +43,15 @@ const DetailRow = ({ icon, label, value, multiline }) => (
     </View>
   </View>
 );
+
+const normalizePhoneNumber = (phone) => {
+  if (!phone) return '';
+  let cleaned = phone.replace(/\D/g, '');
+  if (cleaned.startsWith('0')) {
+    cleaned = '62' + cleaned.slice(1);
+  }
+  return cleaned;
+};
 
 const AlertDetailScreen = ({ route }) => {
   const { alert } = route.params;
@@ -81,6 +90,33 @@ const AlertDetailScreen = ({ route }) => {
     }
   }, [alert.latitude, alert.longitude]);
 
+  const openWhatsApp = useCallback(async () => {
+    if (!alert.phone) return;
+    const normalized = normalizePhoneNumber(alert.phone);
+    const text = encodeURIComponent(`Halo, saya petugas SiagaRT terkait laporan Anda.`);
+    const appUrl = `whatsapp://send?phone=${normalized}&text=${text}`;
+    const webUrl = `https://wa.me/${normalized}?text=${text}`;
+    try {
+      await Linking.openURL(appUrl);
+    } catch {
+      try {
+        await Linking.openURL(webUrl);
+      } catch {
+        setSnack({ visible: true, variant: 'error', message: 'Gagal membuka WhatsApp.' });
+      }
+    }
+  }, [alert.phone]);
+
+  const makeVoiceCall = useCallback(async () => {
+    if (!alert.phone) return;
+    const url = `tel:${alert.phone}`;
+    try {
+      await Linking.openURL(url);
+    } catch {
+      setSnack({ visible: true, variant: 'error', message: 'Tidak dapat memulai panggilan telepon.' });
+    }
+  }, [alert.phone]);
+
   return (
     <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
@@ -94,6 +130,30 @@ const AlertDetailScreen = ({ route }) => {
           onPress={openInGoogleMaps}
           style={styles.mapsButton}
         />
+
+        <View style={styles.contactRow}>
+          <Pressable
+            style={[styles.contactButton, styles.whatsappButton]}
+            onPress={openWhatsApp}
+            android_ripple={{ color: 'rgba(255,255,255,0.2)' }}
+            accessibilityRole="button"
+            accessibilityLabel="Hubungi WhatsApp"
+          >
+            <MaterialCommunityIcons name="whatsapp" size={22} color={colors.onPrimary} style={styles.btnIcon} />
+            <Text style={styles.contactBtnLabel}>WhatsApp</Text>
+          </Pressable>
+
+          <Pressable
+            style={[styles.contactButton, styles.phoneButton]}
+            onPress={makeVoiceCall}
+            android_ripple={{ color: 'rgba(255,255,255,0.2)' }}
+            accessibilityRole="button"
+            accessibilityLabel="Hubungi Telepon"
+          >
+            <MaterialCommunityIcons name="phone" size={22} color={colors.onPrimary} style={styles.btnIcon} />
+            <Text style={styles.contactBtnLabel}>Telepon</Text>
+          </Pressable>
+        </View>
 
         <InfoCard style={styles.card}>
           <View style={styles.headerRow}>
@@ -118,6 +178,9 @@ const AlertDetailScreen = ({ route }) => {
           <DetailRow icon="crosshairs-gps" label="Koordinat"
             value={`${alert.latitude?.toFixed(6)}, ${alert.longitude?.toFixed(6)}`} />
           <DetailRow icon="clock-outline" label="Waktu Lapor" value={formatTime(alert.createdAt)} />
+          {!!alert.message && (
+            <DetailRow icon="message-text-outline" label="Pesan Warga" value={alert.message} multiline />
+          )}
         </InfoCard>
 
         <SectionHeader title="Perbarui Status Penanganan" style={styles.section} />
@@ -165,6 +228,34 @@ const styles = StyleSheet.create({
   rowValue: { ...typography.body, color: colors.textPrimary },
   section: { marginTop: spacing.xl },
   segmented: { marginTop: spacing.xs },
+  contactRow: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    marginTop: spacing.md,
+  },
+  contactButton: {
+    flex: 1,
+    minHeight: TOUCH_TARGET,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    paddingVertical: spacing.md,
+    ...elevation.sm,
+  },
+  whatsappButton: {
+    backgroundColor: '#25D366',
+  },
+  phoneButton: {
+    backgroundColor: colors.primaryVariant,
+  },
+  btnIcon: {
+    marginRight: spacing.sm,
+  },
+  contactBtnLabel: {
+    ...typography.button,
+    color: colors.onPrimary,
+  },
 });
 
 export default AlertDetailScreen;

@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { View, StyleSheet, ScrollView } from 'react-native';
+import { View, StyleSheet, ScrollView, TextInput } from 'react-native';
 import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { ref, push, set, serverTimestamp } from 'firebase/database';
@@ -38,10 +38,12 @@ const UserHomeScreen = ({ route }) => {
 
   const [loading, setLoading] = useState(false);
   const [confirm, setConfirm] = useState({ visible: false, type: '' });
+  const [message, setMessage] = useState('');
   const [snack, setSnack] = useState({ visible: false, message: '', variant: 'success' });
 
-  const sendAlert = useCallback(async (type) => {
+  const sendAlert = useCallback(async (type, userMessage) => {
     setConfirm({ visible: false, type: '' });
+    setMessage('');
     setLoading(true);
     try {
       const location = await getCurrentLocation();
@@ -52,6 +54,7 @@ const UserHomeScreen = ({ route }) => {
         userName: user.name,
         phone: user.phone,
         type,
+        message: userMessage || '',
         latitude: location.latitude,
         longitude: location.longitude,
         address: location.address,
@@ -137,13 +140,28 @@ const UserHomeScreen = ({ route }) => {
 
       <ConfirmationDialog
         visible={confirm.visible}
-        onDismiss={() => setConfirm({ visible: false, type: '' })}
-        onConfirm={() => sendAlert(confirmType)}
+        onDismiss={() => { setConfirm({ visible: false, type: '' }); setMessage(''); }}
+        onConfirm={() => sendAlert(confirmType, message)}
         title="Konfirmasi Laporan"
         message={`Kirim laporan ${isEmergency ? 'DARURAT (Merah)' : 'SIAGA (Kuning)'}? Lokasi Anda akan dibagikan ke petugas.`}
         confirmLabel="Kirim Sekarang"
         tone={isEmergency ? 'emergency' : 'warning'}
-      />
+      >
+        <TextInput
+          style={msgInputStyles.input}
+          placeholder="Tulis pesan / keterangan kejadian... (opsional)"
+          placeholderTextColor={colors.textSecondary}
+          value={message}
+          onChangeText={setMessage}
+          multiline
+          numberOfLines={3}
+          maxLength={500}
+          textAlignVertical="top"
+        />
+        {message.length > 0 && (
+          <Text style={msgInputStyles.counter}>{message.length}/500</Text>
+        )}
+      </ConfirmationDialog>
 
       <LoadingOverlay visible={loading} message="Mengambil lokasi dan mengirim laporan..." />
 
@@ -177,6 +195,26 @@ const styles = StyleSheet.create({
   section: { marginTop: spacing.sm },
   instructionRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: spacing.md },
   instructionText: { ...typography.body, color: colors.textPrimary, marginLeft: spacing.sm, flex: 1 },
+});
+
+const msgInputStyles = StyleSheet.create({
+  input: {
+    marginTop: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.divider,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    minHeight: 80,
+    ...typography.body,
+    color: colors.textPrimary,
+    backgroundColor: colors.background,
+  },
+  counter: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    textAlign: 'right',
+    marginTop: spacing.xs,
+  },
 });
 
 export default UserHomeScreen;

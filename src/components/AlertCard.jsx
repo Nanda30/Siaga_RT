@@ -62,6 +62,12 @@ const AlertCard = ({ alert, onPress }) => {
           <MaterialCommunityIcons name="map-marker" size={15} color={colors.textSecondary} />
           <Text style={styles.infoText} numberOfLines={1}>{alert.address}</Text>
         </View>
+        {!!alert.message && (
+          <View style={styles.infoRow}>
+            <MaterialCommunityIcons name="message-text-outline" size={15} color={colors.textSecondary} />
+            <Text style={styles.infoText} numberOfLines={1}>{alert.message}</Text>
+          </View>
+        )}
 
         <Text style={styles.time}>{formatTime(alert.createdAt)}</Text>
       </View>

@@ -18,6 +18,7 @@ const ConfirmationDialog = ({
   cancelLabel = 'Batal',
   tone = 'primary',
   loading = false,
+  children,
 }) => {
   const toneColor =
     tone === 'emergency' ? colors.emergency : tone === 'warning' ? colors.warningPressed : colors.primary;
@@ -28,6 +29,7 @@ const ConfirmationDialog = ({
         <Dialog.Title style={styles.title}>{title}</Dialog.Title>
         <Dialog.Content>
           <Text style={styles.message}>{message}</Text>
+          {children}
         </Dialog.Content>
         <Dialog.Actions>
           <Button onPress={onDismiss} disabled={loading} textColor={colors.textSecondary}>
