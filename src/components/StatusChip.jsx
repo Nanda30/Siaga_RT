@@ -2,7 +2,7 @@ import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { colors } from '../theme/colors';
+import { colors, useThemeColors } from '../theme/colors';
 import { typography } from '../theme/typography';
 import { radius } from '../theme/radius';
 import { spacing } from '../theme/spacing';
@@ -12,6 +12,7 @@ import { spacing } from '../theme/spacing';
  * `ok` toggles between success and error coloring.
  */
 const StatusChip = ({ icon, label, ok }) => {
+  const colors = useThemeColors();
   const color = ok ? colors.success : colors.error;
   return (
     <View style={[styles.chip, { backgroundColor: `${color}14`, borderColor: `${color}33` }]}>

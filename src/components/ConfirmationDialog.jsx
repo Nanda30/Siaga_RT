@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet } from 'react-native';
 import { Portal, Dialog, Button, Text } from 'react-native-paper';
-import { colors } from '../theme/colors';
+import { colors, useThemeColors } from '../theme/colors';
 import { typography } from '../theme/typography';
 
 /**
@@ -20,15 +20,16 @@ const ConfirmationDialog = ({
   loading = false,
   children,
 }) => {
+  const colors = useThemeColors();
   const toneColor =
     tone === 'emergency' ? colors.emergency : tone === 'warning' ? colors.warningPressed : colors.primary;
 
   return (
     <Portal>
-      <Dialog visible={visible} onDismiss={onDismiss} style={styles.dialog}>
-        <Dialog.Title style={styles.title}>{title}</Dialog.Title>
+      <Dialog visible={visible} onDismiss={onDismiss} style={[styles.dialog, { backgroundColor: colors.surface }]}>
+        <Dialog.Title style={[styles.title, { color: colors.textPrimary }]}>{title}</Dialog.Title>
         <Dialog.Content>
-          <Text style={styles.message}>{message}</Text>
+          <Text style={[styles.message, { color: colors.textSecondary }]}>{message}</Text>
           {children}
         </Dialog.Content>
         <Dialog.Actions>

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Appbar } from 'react-native-paper';
 import ConfirmationDialog from './ConfirmationDialog';
-import { colors } from '../theme/colors';
+import { colors, useThemeColors } from '../theme/colors';
 
 /**
  * Logout action for the navigation AppBar. Confirms before resetting the
@@ -9,6 +9,7 @@ import { colors } from '../theme/colors';
  */
 const LogoutAction = ({ navigation }) => {
   const [visible, setVisible] = useState(false);
+  const colors = useThemeColors();
 
   const confirmLogout = () => {
     setVisible(false);

@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "SiagaRT",
-    "slug": "SiagaRT",
+    "name": "SiagaRW",
+    "slug": "SiagaRW",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -15,7 +15,7 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "SiagaRT memerlukan lokasi Anda untuk mengirim laporan darurat ke petugas."
+        "NSLocationWhenInUseUsageDescription": "SiagaRW memerlukan lokasi Anda untuk mengirim laporan darurat ke petugas."
       }
     },
     "android": {
@@ -39,7 +39,7 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "SiagaRT memerlukan lokasi Anda untuk mengirim laporan darurat ke petugas."
+          "locationWhenInUsePermission": "SiagaRW memerlukan lokasi Anda untuk mengirim laporan darurat ke petugas."
         }
       ],
       "expo-notifications"

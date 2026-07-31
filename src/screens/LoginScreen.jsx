@@ -13,13 +13,14 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { db } from '../services/firebase';
 import PrimaryButton from '../components/PrimaryButton';
 import AppSnackbar from '../components/AppSnackbar';
-import { colors } from '../theme/colors';
+import { colors, useThemeColors } from '../theme/colors';
 import { typography } from '../theme/typography';
 import { spacing } from '../theme/spacing';
 import { radius } from '../theme/radius';
 import { elevation } from '../theme/elevation';
 
 const LoginScreen = ({ navigation }) => {
+  const colors = useThemeColors();
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [role, setRole] = useState('Warga');
@@ -67,7 +68,7 @@ const LoginScreen = ({ navigation }) => {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={styles.container}
+      style={[styles.container, { backgroundColor: colors.background }]}
     >
       <ScrollView
         contentContainerStyle={styles.scrollContent}
@@ -75,14 +76,14 @@ const LoginScreen = ({ navigation }) => {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.logoContainer}>
-          <View style={styles.logoCircle}>
+          <View style={[styles.logoCircle, { backgroundColor: colors.primary }]}>
             <MaterialCommunityIcons name="shield-check" size={56} color={colors.onPrimary} />
           </View>
-          <Text style={styles.appName}>SiagaRT</Text>
-          <Text style={styles.subtitle}>Sistem Informasi Keamanan Warga</Text>
+          <Text style={[styles.appName, { color: colors.primary }]}>SiagaRW</Text>
+          <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Sistem Informasi Keamanan Warga</Text>
         </View>
 
-        <View style={[styles.card, elevation.md]}>
+        <View style={[styles.card, elevation.md, { backgroundColor: colors.surface, borderColor: colors.divider }]}>
           <TextInput
             label="Nama Lengkap"
             value={name}
@@ -106,7 +107,7 @@ const LoginScreen = ({ navigation }) => {
             left={<TextInput.Icon icon="phone" />}
           />
 
-          <Text style={styles.label}>Pilih Peran</Text>
+          <Text style={[styles.label, { color: colors.textPrimary }]}>Pilih Peran</Text>
           <SegmentedButtons
             value={role}
             onValueChange={setRole}
@@ -126,7 +127,7 @@ const LoginScreen = ({ navigation }) => {
           />
         </View>
 
-        <Text style={styles.footer}>Aplikasi keamanan lingkungan untuk warga dan petugas.</Text>
+        <Text style={[styles.footer, { color: colors.textSecondary }]}>Aplikasi keamanan lingkungan untuk warga dan petugas.</Text>
       </ScrollView>
 
       <AppSnackbar

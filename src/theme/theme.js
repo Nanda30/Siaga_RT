@@ -1,5 +1,5 @@
-import { MD3LightTheme, configureFonts } from 'react-native-paper';
-import { colors } from './colors';
+import { MD3LightTheme, MD3DarkTheme, configureFonts } from 'react-native-paper';
+import { colors, darkColors } from './colors';
 import { typography } from './typography';
 
 export { colors } from './colors';
@@ -45,4 +45,36 @@ export const theme = {
   },
   // Custom tokens (not part of MD3) for direct access in components.
   custom: { colors, typography },
+};
+
+// Dark style Paper theme. Maps our dark palette.
+export const darkTheme = {
+  ...MD3DarkTheme,
+  roundness: 3,
+  fonts: configureFonts({ config: fontConfig }),
+  colors: {
+    ...MD3DarkTheme.colors,
+    primary: darkColors.primary,
+    onPrimary: darkColors.onPrimary,
+    primaryContainer: darkColors.surfaceVariant,
+    secondary: darkColors.primaryVariant,
+    background: darkColors.background,
+    surface: darkColors.surface,
+    surfaceVariant: darkColors.surfaceVariant,
+    onSurface: darkColors.textPrimary,
+    onSurfaceVariant: darkColors.textSecondary,
+    outline: darkColors.divider,
+    outlineVariant: darkColors.divider,
+    error: darkColors.error,
+    elevation: {
+      level0: 'transparent',
+      level1: darkColors.surface,
+      level2: darkColors.surface,
+      level3: darkColors.surface,
+      level4: darkColors.surface,
+      level5: darkColors.surface,
+    },
+  },
+  // Custom tokens
+  custom: { colors: darkColors, typography },
 };

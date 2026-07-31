@@ -10,7 +10,7 @@ import StatusBadge from '../components/StatusBadge';
 import SectionHeader from '../components/SectionHeader';
 import PrimaryButton from '../components/PrimaryButton';
 import AppSnackbar from '../components/AppSnackbar';
-import { alertTypeColors, colors } from '../theme/colors';
+import { alertTypeColors, colors, useThemeColors, useAlertTypeColors } from '../theme/colors';
 import { typography } from '../theme/typography';
 import { spacing, TOUCH_TARGET } from '../theme/spacing';
 import { radius } from '../theme/radius';
@@ -34,12 +34,12 @@ const formatTime = (value) => {
   }
 };
 
-const DetailRow = ({ icon, label, value, multiline }) => (
+const DetailRow = ({ icon, label, value, multiline, colors }) => (
   <View style={styles.row}>
     <MaterialCommunityIcons name={icon} size={22} color={colors.primary} style={styles.rowIcon} />
     <View style={styles.rowText}>
-      <Text style={styles.rowLabel}>{label}</Text>
-      <Text style={styles.rowValue} numberOfLines={multiline ? undefined : 1}>{value || '-'}</Text>
+      <Text style={[styles.rowLabel, { color: colors.textSecondary }]}>{label}</Text>
+      <Text style={[styles.rowValue, { color: colors.textPrimary }]} numberOfLines={multiline ? undefined : 1}>{value || '-'}</Text>
     </View>
   </View>
 );
@@ -58,8 +58,9 @@ const AlertDetailScreen = ({ route }) => {
   const [status, setStatus] = useState(alert.status);
   const [updating, setUpdating] = useState(false);
   const [snack, setSnack] = useState({ visible: false, message: '', variant: 'success' });
+  const colors = useThemeColors();
 
-  const { base, on } = alertTypeColors(alert.type);
+  const { base, on } = useAlertTypeColors(alert.type);
   const isEmergency = alert.type === 'EMERGENCY';
 
   const updateStatus = useCallback(async (newStatus) => {
@@ -93,7 +94,7 @@ const AlertDetailScreen = ({ route }) => {
   const openWhatsApp = useCallback(async () => {
     if (!alert.phone) return;
     const normalized = normalizePhoneNumber(alert.phone);
-    const text = encodeURIComponent(`Halo, saya petugas SiagaRT terkait laporan Anda.`);
+    const text = encodeURIComponent(`Halo, saya petugas SiagaRW terkait laporan Anda.`);
     const appUrl = `whatsapp://send?phone=${normalized}&text=${text}`;
     const webUrl = `https://wa.me/${normalized}?text=${text}`;
     try {
@@ -118,9 +119,9 @@ const AlertDetailScreen = ({ route }) => {
   }, [alert.phone]);
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={[styles.mapContainer, elevation.sm]}>
+        <View style={[styles.mapContainer, elevation.sm, { backgroundColor: colors.surfaceVariant }]}>
           <MapDisplay alert={alert} />
         </View>
 
@@ -173,13 +174,13 @@ const AlertDetailScreen = ({ route }) => {
 
           <View style={styles.divider} />
 
-          <DetailRow icon="phone" label="Nomor Ponsel" value={alert.phone} />
-          <DetailRow icon="map-marker" label="Alamat" value={alert.address} multiline />
+          <DetailRow icon="phone" label="Nomor Ponsel" value={alert.phone} colors={colors} />
+          <DetailRow icon="map-marker" label="Alamat" value={alert.address} multiline colors={colors} />
           <DetailRow icon="crosshairs-gps" label="Koordinat"
-            value={`${alert.latitude?.toFixed(6)}, ${alert.longitude?.toFixed(6)}`} />
-          <DetailRow icon="clock-outline" label="Waktu Lapor" value={formatTime(alert.createdAt)} />
+            value={`${alert.latitude?.toFixed(6)}, ${alert.longitude?.toFixed(6)}`} colors={colors} />
+          <DetailRow icon="clock-outline" label="Waktu Lapor" value={formatTime(alert.createdAt)} colors={colors} />
           {!!alert.message && (
-            <DetailRow icon="message-text-outline" label="Pesan Warga" value={alert.message} multiline />
+            <DetailRow icon="message-text-outline" label="Pesan Warga" value={alert.message} multiline colors={colors} />
           )}
         </InfoCard>
 
