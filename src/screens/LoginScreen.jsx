@@ -8,9 +8,11 @@ import {
   Keyboard,
 } from 'react-native';
 import { TextInput, Text, SegmentedButtons } from 'react-native-paper';
-import { ref, set } from 'firebase/database';
+import { ref, set, push, serverTimestamp } from 'firebase/database';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { db } from '../services/firebase';
+import { saveUserLocal, addPendingSync } from '../services/localStorage';
+import { useNetworkStatus } from '../hooks/useNetworkStatus';
 import PrimaryButton from '../components/PrimaryButton';
 import AppSnackbar from '../components/AppSnackbar';
 import { colors, useThemeColors } from '../theme/colors';
@@ -26,18 +28,27 @@ const LoginScreen = ({ navigation }) => {
   const [role, setRole] = useState('Warga');
   const [loading, setLoading] = useState(false);
   const [snack, setSnack] = useState({ visible: false, message: '', variant: 'error' });
+  const online = useNetworkStatus();
 
-  const showError = (message) =>
-    setSnack({ visible: true, message, variant: 'error' });
+  const showSnack = (message, variant = 'error') =>
+    setSnack({ visible: true, message, variant });
 
   const validate = () => {
     if (!name.trim()) {
-      showError('Harap isi nama lengkap Anda.');
+      showSnack('Nama wajib diisi.');
+      return false;
+    }
+    if (!phone.trim()) {
+      showSnack('Nomor HP wajib diisi.');
       return false;
     }
     const digits = phone.replace(/[^0-9]/g, '');
-    if (digits.length < 9) {
-      showError('Nomor telepon tidak valid (minimal 9 digit).');
+    if (digits.length < 10) {
+      showSnack('Nomor HP tidak valid (minimal 10 digit).');
+      return false;
+    }
+    if (!role) {
+      showSnack('Role wajib dipilih.');
       return false;
     }
     return true;
@@ -48,18 +59,61 @@ const LoginScreen = ({ navigation }) => {
     if (!validate()) return;
 
     setLoading(true);
+
     try {
-      const uid = phone.replace(/[^0-9]/g, '');
-      const user = { uid, name: name.trim(), phone: phone.trim(), role };
+      // Generate unique user ID
+      const userRef = push(ref(db, 'users'));
+      const userId = userRef.key;
 
-      await set(ref(db, `users/${uid}`), {
-        ...user,
-        createdAt: new Date().toISOString(),
-      });
+      const userData = {
+        userId,
+        name: name.trim(),
+        phone: phone.trim(),
+        role,
+        createdAt: serverTimestamp(),
+      };
 
-      navigation.replace(role === 'Warga' ? 'UserHome' : 'AdminDashboard', { user });
+      if (online) {
+        // ONLINE: Save to Firebase
+        try {
+          await set(userRef, userData);
+
+          showSnack('Berhasil masuk.', 'success');
+
+          setTimeout(() => {
+            navigation.replace(role === 'Warga' ? 'UserHome' : 'AdminDashboard', {
+              user: { ...userData, createdAt: new Date().toISOString() }
+            });
+          }, 800);
+        } catch (err) {
+          // Firebase failed - fall back to local storage
+          console.warn('Firebase save failed, saving locally:', err);
+          await saveUserLocal({ ...userData, createdAt: new Date().toISOString() });
+          await addPendingSync({ type: 'CREATE_USER', data: userData });
+
+          showSnack('Login berhasil (offline mode). Data akan sync otomatis saat online.', 'success');
+
+          setTimeout(() => {
+            navigation.replace(role === 'Warga' ? 'UserHome' : 'AdminDashboard', {
+              user: { ...userData, createdAt: new Date().toISOString() }
+            });
+          }, 1500);
+        }
+      } else {
+        // OFFLINE: Save locally and queue for sync
+        const localUserData = { ...userData, createdAt: new Date().toISOString() };
+        await saveUserLocal(localUserData);
+        await addPendingSync({ type: 'CREATE_USER', data: userData });
+
+        showSnack('Login berhasil (offline). Data akan sync ke server saat online.', 'success');
+
+        setTimeout(() => {
+          navigation.replace(role === 'Warga' ? 'UserHome' : 'AdminDashboard', { user: localUserData });
+        }, 1500);
+      }
     } catch (err) {
-      showError('Gagal masuk: ' + (err?.message || 'Periksa koneksi internet Anda.'));
+      console.error('Login error:', err);
+      showSnack('Gagal menyimpan data. Silakan coba lagi.');
     } finally {
       setLoading(false);
     }

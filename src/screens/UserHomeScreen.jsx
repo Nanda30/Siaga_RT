@@ -61,7 +61,7 @@ const UserHomeScreen = ({ route }) => {
       const alertId = push(ref(db, 'alerts')).key;
       const alertData = {
         alertId,
-        userId: user.uid,
+        userId: user.userId,
         userName: user.name,
         phone: user.phone,
         type,
@@ -79,7 +79,17 @@ const UserHomeScreen = ({ route }) => {
         message: `Laporan ${type === 'EMERGENCY' ? 'Darurat' : 'Siaga'} terkirim. Petugas akan merespons.`,
       });
     } catch (error) {
-      setSnack({ visible: true, variant: 'error', message: error?.message || 'Gagal mengirim laporan.' });
+      let message = 'Gagal mengirim laporan. Silakan coba lagi.';
+
+      if (error?.code === 'PERMISSION_DENIED') {
+        message = 'Akses ditolak. Periksa pengaturan Firebase.';
+      } else if (error?.message?.includes('location')) {
+        message = 'Gagal mendapatkan lokasi. Aktifkan GPS Anda.';
+      } else if (error?.message) {
+        message = error.message;
+      }
+
+      setSnack({ visible: true, variant: 'error', message });
     } finally {
       setLoading(false);
     }

@@ -74,9 +74,18 @@ const AlertDetailScreen = ({ route }) => {
         updatedAt: new Date().toISOString(),
       });
       setSnack({ visible: true, variant: 'success', message: 'Status laporan diperbarui.' });
-    } catch {
+    } catch (err) {
       setStatus(prev); // revert optimistic update on failure
-      setSnack({ visible: true, variant: 'error', message: 'Gagal memperbarui status.' });
+
+      let message = 'Gagal memperbarui status. Silakan coba lagi.';
+
+      if (err?.code === 'PERMISSION_DENIED') {
+        message = 'Akses ditolak. Periksa pengaturan Firebase.';
+      } else if (err?.message) {
+        message = err.message;
+      }
+
+      setSnack({ visible: true, variant: 'error', message });
     } finally {
       setUpdating(false);
     }
