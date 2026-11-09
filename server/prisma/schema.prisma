@@ -1,0 +1,85 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  SATPAM
+  WARGA
+}
+
+enum AlertType {
+  EMERGENCY
+  CAUTION
+}
+
+enum AlertStatus {
+  PENDING
+  RESPONDING
+  COMPLETED
+}
+
+model User {
+  id        String   @id @default(uuid())
+  name      String
+  phone     String   @unique
+  role      Role     @default(WARGA)
+  isActive  Boolean  @default(true)
+  fcmToken  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  alerts        Alert[]
+  notifications Notification[]
+  activityLogs  ActivityLog[]
+  handledAlerts Alert[] @relation("HandledBy")
+}
+
+model Alert {
+  id          String      @id @default(uuid())
+  userId      String
+  type        AlertType
+  message     String?     @db.Text
+  latitude    Float
+  longitude   Float
+  address     String?     @db.Text
+  status      AlertStatus @default(PENDING)
+  handledById String?
+  clientId    String?     @unique
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  user      User  @relation(fields: [userId], references: [id])
+  handledBy User? @relation("HandledBy", fields: [handledById], references: [id])
+
+  @@index([status, createdAt])
+  @@index([userId, createdAt])
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  title     String
+  body      String   @db.Text
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+  @@index([userId, isRead])
+}
+
+model ActivityLog {
+  id          String   @id @default(uuid())
+  userId      String?
+  action      String
+  description String?  @db.Text
+  createdAt   DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+  @@index([createdAt])
+}

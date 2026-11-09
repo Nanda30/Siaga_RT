@@ -7,24 +7,23 @@ import {
   ScrollView,
   Keyboard,
 } from 'react-native';
-import { TextInput, Text, SegmentedButtons } from 'react-native-paper';
-import { ref, set } from 'firebase/database';
+import { TextInput, Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { db } from '../services/firebase';
+import { useAuth } from '../context/AuthContext';
 import PrimaryButton from '../components/PrimaryButton';
 import AppSnackbar from '../components/AppSnackbar';
 import { colors } from '../theme/colors';
 import { typography } from '../theme/typography';
 import { spacing } from '../theme/spacing';
-import { radius } from '../theme/radius';
 import { elevation } from '../theme/elevation';
 
 const LoginScreen = ({ navigation }) => {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
-  const [role, setRole] = useState('Warga');
   const [loading, setLoading] = useState(false);
   const [snack, setSnack] = useState({ visible: false, message: '', variant: 'error' });
+
+  const { login } = useAuth();
 
   const showError = (message) =>
     setSnack({ visible: true, message, variant: 'error' });
@@ -48,17 +47,16 @@ const LoginScreen = ({ navigation }) => {
 
     setLoading(true);
     try {
-      const uid = phone.replace(/[^0-9]/g, '');
-      const user = { uid, name: name.trim(), phone: phone.trim(), role };
+      const res = await login(name.trim(), phone.trim());
+      const loggedUser = res.user;
 
-      await set(ref(db, `users/${uid}`), {
-        ...user,
-        createdAt: new Date().toISOString(),
-      });
-
-      navigation.replace(role === 'Warga' ? 'UserHome' : 'AdminDashboard', { user });
+      if (loggedUser.role === 'WARGA') {
+        navigation.replace('UserHome', { user: loggedUser });
+      } else {
+        navigation.replace('AdminDashboard', { user: loggedUser });
+      }
     } catch (err) {
-      showError('Gagal masuk: ' + (err?.message || 'Periksa koneksi internet Anda.'));
+      showError(err.message || 'Gagal masuk. Periksa koneksi ke server.');
     } finally {
       setLoading(false);
     }
@@ -78,8 +76,8 @@ const LoginScreen = ({ navigation }) => {
           <View style={styles.logoCircle}>
             <MaterialCommunityIcons name="shield-check" size={56} color={colors.onPrimary} />
           </View>
-          <Text style={styles.appName}>SiagaRT</Text>
-          <Text style={styles.subtitle}>Sistem Informasi Keamanan Warga</Text>
+          <Text style={styles.appName}>SiapSiaga</Text>
+          <Text style={styles.subtitle}>Sistem Informasi Keamanan Warga & Lingkungan</Text>
         </View>
 
         <View style={[styles.card, elevation.md]}>
@@ -95,7 +93,7 @@ const LoginScreen = ({ navigation }) => {
           />
 
           <TextInput
-            label="Nomor Telepon"
+            label="Nomor Telepon (WhatsApp)"
             value={phone}
             onChangeText={setPhone}
             mode="outlined"
@@ -104,17 +102,6 @@ const LoginScreen = ({ navigation }) => {
             returnKeyType="done"
             onSubmitEditing={handleLogin}
             left={<TextInput.Icon icon="phone" />}
-          />
-
-          <Text style={styles.label}>Pilih Peran</Text>
-          <SegmentedButtons
-            value={role}
-            onValueChange={setRole}
-            buttons={[
-              { value: 'Warga', label: 'Warga', icon: 'account' },
-              { value: 'Satpam', label: 'Petugas', icon: 'shield-account' },
-            ]}
-            style={styles.segmented}
           />
 
           <PrimaryButton
@@ -126,7 +113,9 @@ const LoginScreen = ({ navigation }) => {
           />
         </View>
 
-        <Text style={styles.footer}>Aplikasi keamanan lingkungan untuk warga dan petugas.</Text>
+        <Text style={styles.footer}>
+          Peran (Warga/Petugas) otomatis ditentukan oleh sistem terpusat.
+        </Text>
       </ScrollView>
 
       <AppSnackbar
@@ -158,24 +147,16 @@ const styles = StyleSheet.create({
     ...elevation.md,
   },
   appName: { ...typography.screenTitle, color: colors.primary },
-  subtitle: { ...typography.body, color: colors.textSecondary, marginTop: spacing.xs, textAlign: 'center' },
+  subtitle: { ...typography.body, color: colors.outline, textAlign: 'center', marginTop: spacing.xs },
   card: {
     backgroundColor: colors.surface,
-    borderRadius: radius.lg,
     padding: spacing.xl,
-    borderWidth: 1,
-    borderColor: colors.divider,
+    borderRadius: 16,
+    marginBottom: spacing.xl,
   },
   input: { marginBottom: spacing.lg, backgroundColor: colors.surface },
-  label: { ...typography.bodyStrong, color: colors.textPrimary, marginBottom: spacing.sm },
-  segmented: { marginBottom: spacing.xl },
-  button: { marginTop: spacing.xs },
-  footer: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    marginTop: spacing.xl,
-  },
+  button: { marginTop: spacing.sm },
+  footer: { ...typography.caption, color: colors.outline, textAlign: 'center' },
 });
 
 export default LoginScreen;

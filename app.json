@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "SiagaRT",
-    "slug": "SiagaRT",
+    "name": "SiapSiaga",
+    "slug": "siapsiaga",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
       "image": "./assets/splash-icon.png",
@@ -14,11 +14,14 @@
     },
     "ios": {
       "supportsTablet": true,
+      "bundleIdentifier": "com.siapsiaga.app",
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "SiagaRT memerlukan lokasi Anda untuk mengirim laporan darurat ke petugas."
+        "NSLocationWhenInUseUsageDescription": "SiapSiaga memerlukan lokasi Anda untuk mengirim laporan darurat ke petugas ronda/satpam."
       }
     },
     "android": {
+      "package": "com.siapsiaga.app",
+      "versionCode": 1,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0F4C81"
@@ -28,7 +31,9 @@
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",
         "POST_NOTIFICATIONS",
-        "VIBRATE"
+        "VIBRATE",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
       ]
     },
     "web": {
@@ -39,10 +44,16 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "SiagaRT memerlukan lokasi Anda untuk mengirim laporan darurat ke petugas."
+          "locationWhenInUsePermission": "SiapSiaga memerlukan lokasi Anda untuk mengirim laporan darurat ke petugas ronda/satpam."
         }
       ],
-      "expo-notifications"
-    ]
+      "expo-notifications",
+      "./plugins/withCleartextTraffic"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "a59fbde2-e62e-4f0a-a430-9422dd619ff8"
+      }
+    }
   }
 }

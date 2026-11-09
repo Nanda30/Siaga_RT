@@ -9,7 +9,7 @@ dist/
 web-build/
 expo-env.d.ts
 
-# Native
+# Native & Signing
 .kotlin/
 *.orig.*
 *.jks
@@ -30,8 +30,18 @@ yarn-error.*
 .DS_Store
 *.pem
 
-# local env files
-.env*.local
+# Env files
+.env
+.env.*
+!.env.example
+
+# Google services (FCM credentials)
+google-services.json
+GoogleService-Info.plist
+
+# Server logs & secrets
+server/logs/
+server/secrets/
 
 # typescript
 *.tsbuildinfo

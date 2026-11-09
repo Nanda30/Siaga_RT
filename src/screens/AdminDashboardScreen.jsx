@@ -1,23 +1,20 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { View, StyleSheet, FlatList } from 'react-native';
+import { View, StyleSheet, FlatList, RefreshControl } from 'react-native';
 import { Text, Searchbar, ActivityIndicator } from 'react-native-paper';
-import { ref, onValue, query, orderByChild } from 'firebase/database';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { db } from '../services/firebase';
+import { alertsApi, dashboardApi } from '../api/endpoints';
 import AlertCard from '../components/AlertCard';
 import EmptyState from '../components/EmptyState';
 import AppSnackbar from '../components/AppSnackbar';
 import { colors } from '../theme/colors';
 import { typography } from '../theme/typography';
 import { spacing } from '../theme/spacing';
-import { radius } from '../theme/radius';
 import { elevation } from '../theme/elevation';
 
 const FILTERS = [
-  { key: 'ALL', label: 'Semua', icon: 'format-list-bulleted' },
-  { key: 'PENDING', label: 'Menunggu', icon: 'clock-alert' },
-  { key: 'RESPONDING', label: 'Ditangani', icon: 'progress-wrench' },
-  { key: 'COMPLETED', label: 'Selesai', icon: 'check-circle' },
+  { key: 'ALL', label: 'Semua' },
+  { key: 'PENDING', label: 'Menunggu' },
+  { key: 'RESPONDING', label: 'Proses' },
+  { key: 'COMPLETED', label: 'Selesai' },
 ];
 
 const SummaryCard = ({ label, count, color, active }) => (
@@ -29,36 +26,50 @@ const SummaryCard = ({ label, count, color, active }) => (
 
 const AdminDashboardScreen = ({ navigation }) => {
   const [alerts, setAlerts] = useState([]);
+  const [counts, setCounts] = useState({ pending: 0, responding: 0, completed: 0, total: 0 });
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('ALL');
-  const [error, setError] = useState(false);
+  const [snack, setSnack] = useState({ visible: false, message: '', variant: 'error' });
 
-  useEffect(() => {
-    const alertsRef = query(ref(db, 'alerts'), orderByChild('createdAt'));
-    const unsubscribe = onValue(
-      alertsRef,
-      (snapshot) => {
-        const data = snapshot.val();
-        const list = data
-          ? Object.values(data).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
-          : [];
-        setAlerts(list);
-        setLoading(false);
-      },
-      () => {
-        setError(true);
-        setLoading(false);
+  const fetchData = useCallback(async () => {
+    try {
+      const [alertsRes, dashRes] = await Promise.all([
+        alertsApi.getAll({ limit: 50 }),
+        dashboardApi.getSummary().catch(() => null),
+      ]);
+
+      setAlerts(alertsRes.alerts || []);
+      if (dashRes && dashRes.counts) {
+        setCounts(dashRes.counts);
+      } else {
+        const raw = alertsRes.alerts || [];
+        setCounts({
+          pending: raw.filter((a) => a.status === 'PENDING').length,
+          responding: raw.filter((a) => a.status === 'RESPONDING').length,
+          completed: raw.filter((a) => a.status === 'COMPLETED').length,
+          total: raw.length,
+        });
       }
-    );
-    return () => unsubscribe();
+    } catch (err) {
+      setSnack({ visible: true, message: err.message || 'Gagal memuat data dari server.', variant: 'error' });
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
   }, []);
 
-  const counts = useMemo(() => ({
-    PENDING: alerts.filter((a) => a.status === 'PENDING').length,
-    RESPONDING: alerts.filter((a) => a.status === 'RESPONDING').length,
-    COMPLETED: alerts.filter((a) => a.status === 'COMPLETED').length,
-  }), [alerts]);
+  useEffect(() => {
+    fetchData();
+    const interval = setInterval(fetchData, 15000); // Polling otomatis tiap 15 detik
+    return () => clearInterval(interval);
+  }, [fetchData]);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchData();
+  };
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -66,27 +77,49 @@ const AdminDashboardScreen = ({ navigation }) => {
       if (filter !== 'ALL' && a.status !== filter) return false;
       if (!q) return true;
       return (
-        a.userName?.toLowerCase().includes(q) ||
-        a.phone?.toLowerCase().includes(q) ||
+        a.user?.name?.toLowerCase().includes(q) ||
+        a.user?.phone?.toLowerCase().includes(q) ||
         a.address?.toLowerCase().includes(q)
       );
     });
-  }, [alerts, search, filter]);
+  }, [alerts, filter, search]);
 
-  const renderItem = useCallback(
-    ({ item }) => (
-      <AlertCard alert={item} onPress={() => navigation.navigate('AlertDetail', { alert: item })} />
-    ),
-    [navigation]
+  const renderHeader = () => (
+    <View>
+      <View style={styles.summaryRow}>
+        <SummaryCard label="Menunggu" count={counts.pending} color={colors.emergency} active={filter === 'PENDING'} />
+        <SummaryCard label="Proses" count={counts.responding} color={colors.caution} active={filter === 'RESPONDING'} />
+        <SummaryCard label="Selesai" count={counts.completed} color={colors.success} active={filter === 'COMPLETED'} />
+      </View>
+
+      <Searchbar
+        placeholder="Cari nama, no. HP, lokasi..."
+        value={search}
+        onChangeText={setSearch}
+        style={styles.searchbar}
+        inputStyle={styles.searchInput}
+        elevation={1}
+      />
+
+      <View style={styles.filterRow}>
+        {FILTERS.map((f) => (
+          <Text
+            key={f.key}
+            onPress={() => setFilter(f.key)}
+            style={[styles.filterChip, filter === f.key && styles.filterChipActive]}
+          >
+            {f.label}
+          </Text>
+        ))}
+      </View>
+    </View>
   );
-
-  const keyExtractor = useCallback((item) => item.alertId, []);
 
   if (loading) {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={styles.loadingText}>Memuat laporan...</Text>
+        <Text style={styles.loadingText}>Menghubungkan ke Server SiapSiaga...</Text>
       </View>
     );
   }
@@ -95,63 +128,35 @@ const AdminDashboardScreen = ({ navigation }) => {
     <View style={styles.container}>
       <FlatList
         data={filtered}
-        renderItem={renderItem}
-        keyExtractor={keyExtractor}
-        contentContainerStyle={styles.list}
-        showsVerticalScrollIndicator={false}
-        ListHeaderComponent={
-          <View>
-            <View style={styles.summaryRow}>
-              <SummaryCard label="Menunggu" count={counts.PENDING} color={colors.emergency} active={filter === 'PENDING'} />
-              <SummaryCard label="Ditangani" count={counts.RESPONDING} color={colors.warning} active={filter === 'RESPONDING'} />
-              <SummaryCard label="Selesai" count={counts.COMPLETED} color={colors.success} active={filter === 'COMPLETED'} />
-            </View>
-
-            <Searchbar
-              placeholder="Cari nama, telepon, alamat"
-              value={search}
-              onChangeText={setSearch}
-              style={styles.search}
-              inputStyle={typography.body}
-              elevation={1}
-            />
-
-            <FlatList
-              horizontal
-              data={FILTERS}
-              keyExtractor={(f) => f.key}
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.filterRow}
-              renderItem={({ item: f }) => {
-                const active = filter === f.key;
-                return (
-                  <Text
-                    onPress={() => setFilter(f.key)}
-                    style={[styles.filterChip, active && styles.filterChipActive]}
-                  >
-                    {f.label}
-                  </Text>
-                );
-              }}
-            />
-          </View>
-        }
-        ListEmptyComponent={
-          <EmptyState
-            icon="shield-check"
-            title={search || filter !== 'ALL' ? 'Tidak ada hasil' : 'Belum ada laporan'}
-            message={search || filter !== 'ALL'
-              ? 'Coba ubah kata kunci atau filter.'
-              : 'Laporan dari warga akan muncul di sini secara langsung.'}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }) => (
+          <AlertCard
+            alert={{
+              alertId: item.id,
+              userId: item.userId,
+              userName: item.user?.name || 'Warga',
+              phone: item.user?.phone || '-',
+              type: item.type,
+              status: item.status,
+              createdAt: item.createdAt,
+              address: item.address,
+              latitude: item.latitude,
+              longitude: item.longitude,
+            }}
+            onPress={() => navigation.navigate('AlertDetail', { alert: item })}
           />
-        }
+        )}
+        ListHeaderComponent={renderHeader}
+        ListEmptyComponent={<EmptyState title="Tidak Ada Laporan" message="Belum ada laporan warga pada filter ini." />}
+        contentContainerStyle={styles.list}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} />}
       />
 
       <AppSnackbar
-        visible={error}
-        onDismiss={() => setError(false)}
-        message="Gagal memuat laporan. Periksa koneksi internet."
-        variant="error"
+        visible={snack.visible}
+        onDismiss={() => setSnack((s) => ({ ...s, visible: false }))}
+        message={snack.message}
+        variant={snack.variant}
       />
     </View>
   );
@@ -159,40 +164,32 @@ const AdminDashboardScreen = ({ navigation }) => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background },
-  loadingText: { ...typography.body, color: colors.textSecondary, marginTop: spacing.md },
-  list: { padding: spacing.lg, flexGrow: 1 },
-  summaryRow: { flexDirection: 'row', gap: spacing.md, marginBottom: spacing.lg },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  loadingText: { marginTop: spacing.md, color: colors.outline, ...typography.body },
+  list: { padding: spacing.lg },
+  summaryRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.lg },
   summaryCard: {
     flex: 1,
     backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    paddingVertical: spacing.lg,
-    paddingHorizontal: spacing.sm,
+    padding: spacing.md,
+    borderRadius: 12,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.divider,
   },
-  summaryCount: { ...typography.screenTitle },
-  summaryLabel: { ...typography.caption, color: colors.textSecondary, marginTop: spacing.xs },
-  search: { backgroundColor: colors.surface, borderRadius: radius.md, marginBottom: spacing.md },
-  filterRow: { gap: spacing.sm, paddingBottom: spacing.lg },
+  summaryCount: { ...typography.screenTitle, fontWeight: '700' },
+  summaryLabel: { ...typography.caption, color: colors.outline, marginTop: 2 },
+  searchbar: { marginBottom: spacing.md, backgroundColor: colors.surface, borderRadius: 12 },
+  searchInput: { minHeight: 44 },
+  filterRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.lg },
   filterChip: {
-    ...typography.captionStrong,
-    color: colors.textSecondary,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 16,
     backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.divider,
-    borderRadius: radius.pill,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    overflow: 'hidden',
+    color: colors.outline,
+    ...typography.caption,
+    fontWeight: '600',
   },
-  filterChipActive: {
-    color: colors.onPrimary,
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
+  filterChipActive: { backgroundColor: colors.primary, color: colors.onPrimary },
 });
 
 export default AdminDashboardScreen;
